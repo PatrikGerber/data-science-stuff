@@ -1,6 +1,7 @@
 import numpy as np
 
 # =============================================================================
+# Note: this code is only applciable to the Titanic dataset
 # Imputes missing values of Age, using median imputation, depending on the 
 # Sex and the Fare paid by the passanger
 # =============================================================================
@@ -15,22 +16,22 @@ class AgeImputer:
         
     def fit(self, X, y = None):
         self.fareMedian = np.median(X["Fare"])
-        defined = 1 - X["Age"].isnull()
+        non_null = 1 - X["Age"].isnull()
         
         subset1 = (X["Sex"] == "male") & ((X["Fare"] > self.fareMedian) == True)
-        subset1 = subset1 & defined
+        subset1 = subset1 & non_null
         self.med1 = np.median(X[subset1]["Age"])
         
         subset2 = (X["Sex"] == "male") & ((X["Fare"] > self.fareMedian) == False)
-        subset2 = subset2 & defined
+        subset2 = subset2 & non_null
         self.med2 = np.median(X[subset2]["Age"])
         
         subset3 = (X["Sex"] == "female") & ((X["Fare"] > self.fareMedian) == True)
-        subset3 = subset3 & defined
+        subset3 = subset3 & non_null
         self.med3 = np.median(X[subset3]["Age"])
         
         subset4 = (X["Sex"] == "female") & ((X["Fare"] > self.fareMedian) == False)
-        subset4 = subset4 & defined
+        subset4 = subset4 & non_null
         self.med4 = np.median(X[subset4]["Age"])
         
         return self
