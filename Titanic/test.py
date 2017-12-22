@@ -7,10 +7,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # Imports for preprocessing
-from sklearn.pipeline import make_pipeline
 from sklearn import preprocessing
-from _Imputer import _Imputer
-from AgeImputer import AgeImputer
+from Titanic.TitanicDataCleaner import TitanicDataCleaner
+from Titanic.TitanicFeatureEngineer import TitanicFeatureEngineer
 
 # Imports for Model selection
 from sklearn.model_selection import train_test_split
@@ -19,6 +18,7 @@ from sklearn.model_selection import cross_val_score
 
 from sklearn.svm import SVC
 from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
 
 data_train = pd.read_csv("/home/patrik/Programming/data-science-stuff/Titanic/train.csv")
 data_predict = pd.read_csv("/home/patrik/Programming/data-science-stuff/Titanic/test.csv")
@@ -27,93 +27,75 @@ y = data_train.loc[:, "Survived"]
 data_train.drop("Survived", axis = 1, inplace = True)
 
 # =============================================================================
-# Imputing missing values
+# Combining the two datasets for ease of manipulation
 # =============================================================================
 
-# Fare
-
-imp = _Imputer(strategy = "median", features = ["Fare"])
-imp.fit(data_train)
-data_train = imp.transform(data_train)
-data_predict = imp.transform(data_predict)
-
-# Age
-
-ageImputer = AgeImputer()
-ageImputer.fit(data_train)
-data_train = ageImputer.transform(data_train)
-data_predict = ageImputer.transform(data_predict)
-
-# Embarked
-
-most_common = data_train["Embarked"].value_counts().index[0]
-data_train.loc[data_train.isnull()["Embarked"], "Embarked"] = most_common
-data_predict.loc[data_predict.isnull()["Embarked"], "Embarked"] = most_common
+combined = pd.concat([data_train, data_predict])
+combined.reset_index(drop = True, inplace = True)
 
 # =============================================================================
-# Encoding categorical variables
+# Cleaning data
 # =============================================================================
 
-# Sex and Embarked
-
-temp = pd.concat([data_train, data_predict])
-temp = pd.get_dummies(data = temp, columns = ["Sex", "Embarked"], drop_first = True)
-temp.reset_index(drop = True, inplace = True)
+titanicDataCleaner = TitanicDataCleaner()
+combined = titanicDataCleaner.clean(combined)
 
 # =============================================================================
 # Engineering new features
 # =============================================================================
 
-# Creating #Passengers feature: number of passengers with given ticket
+titanicFeatureEngineer = TitanicFeatureEngineer()
+combined = titanicFeatureEngineer.engineer(combined)
 
-nPassengers = pd.DataFrame(temp["Ticket"].value_counts()[temp["Ticket"].values].values, 
-                           columns = ["#Passengers"])
-temp = pd.concat([temp, nPassengers], axis = 1)
+# =============================================================================
+# Unwrapping the two datasets
+# =============================================================================
 
-# Dividing Fare by #Passengers
+data_train = combined.loc[0:data_train.shape[0] - 1, :]
 
-temp["Fare"] /= temp["#Passengers"]
-
-# Creating IsAlone feature
-
-temp["IsAlone"] = (temp["Parch"] + temp["SibSp"] == 0) + 0
-
-# Dropping unnecessary features, and unwrapping into test and training sets
-temp.drop(["Cabin", "Name", "Ticket"], axis = 1, inplace = True)
-
-data_train = temp.loc[0:data_train.shape[0] - 1, :]
-
-data_predict = temp.loc[data_train.shape[0]:, :]
+data_predict = combined.loc[data_train.shape[0]:, :]
 data_predict.reset_index(drop = True, inplace = True)
+
+
 
 # =============================================================================
 # Selecting a model
 # =============================================================================
 
 X_train, X_test, y_train, y_test = train_test_split(data_train, y, 
-                test_size = 0.2, random_state = 0, stratify = y)
+                test_size = 0.2, random_state = 1, stratify = y)
 
-param_range	=	[0.001, 0.003, 0.01, 0.03, 	0.1, 0.3, 1.0]
+param_range	= [0.01, 0.03, 0.1, 0.3, 1.0]
 
-param_grid	=	{'C':	param_range,
-				 'gamma':	param_range,
-                 'kernel':	['rbf']}
+svc_param_grid = {'C': param_range,
+                  "gamma": param_range,
+                  'kernel': 'rbf' }
 
-estimator = GridSearchCV(estimator = SVC(),
-                   param_grid = param_grid,
+forest_param_grid = {"n_estimators": [1000],
+                     "max_features": [5],
+                     "max_depth": [4]}
+
+estimator = GridSearchCV(estimator = RandomForestClassifier(),
+                   param_grid = forest_param_grid,
                    scoring = "accuracy", 
-                   cv = 5, 
-                   n_jobs = -1
-                   )
+                   cv = 2, 
+                   n_jobs = -1)
 
-scores = cross_val_score(estimator, X_train, y_train, scoring = "accuracy", cv = 5)
+scores = cross_val_score(estimator, X_train, y_train, scoring = "accuracy", cv = 4)
 print("CV accuracy:	%.3f	+/-	%.3f" % (np.mean(scores), np.std(scores)))
 
-#svc.fit(X_train, y_train)
-#svc.score(X_test, y_test)
+estimator.fit(X_train, y_train)
+print("Accuracy on test set: %.3f" % estimator.score(X_test, y_test))
 
-answer = pd.DataFrame([estimator.predict(data_predict).astype(int),
-                       range(892, 892 + data_predict.shape[0])],
-                      columns = ["PassengerId", "Survived"])
+# =============================================================================
+# Producing predictions
+# =============================================================================
+
+e = RandomForestClassifier(**estimator.best_params_)
+e.fit(data_train, y)
+
+Ids = pd.DataFrame(list(range(892, 892 + data_predict.shape[0])), columns = ["PassengerId"])
+survived = pd.DataFrame(e.predict(data_predict).astype(int), columns = ["Survived"])
+answer = pd.concat([Ids, survived], axis = 1)
 
 answer.to_csv("answer.txt", encoding='utf-8', index=False)

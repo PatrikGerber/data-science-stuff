@@ -60,4 +60,4 @@ class AgeImputer:
                 
     def fit_transform(self, X, y = None, **fit_params):
         self.fit(X)
-        self.transform(X)
+        return self.transform(X)
