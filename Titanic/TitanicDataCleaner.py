@@ -14,25 +14,30 @@ from Titanic.AgeImputer import AgeImputer
 # =============================================================================
 
 class TitanicDataCleaner:
-    def clean(self, data):
-        data = self.imputeFare(data)
-        data = self.imputeAge(data)
-        data = self.imputeEmbarked(data)
-        data = self.encode(data, ["Embarked", "Sex"])
+    @staticmethod
+    def clean(data):
+        data = TitanicDataCleaner.imputeFare(data)
+        data = TitanicDataCleaner.imputeAge(data)
+        data = TitanicDataCleaner.imputeEmbarked(data)
+        data = TitanicDataCleaner.encode(data, ["Embarked", "Sex"])
         return data
     
-    def imputeFare(self, data):
+    @staticmethod
+    def imputeFare(data):
         imp = _Imputer(strategy = "median", features = ["Fare"])
         return imp.fit_transform(data)
     
-    def imputeAge(self, data):
+    @staticmethod
+    def imputeAge(data):
         ageImputer = AgeImputer()
         return ageImputer.fit_transform(data)
     
-    def imputeEmbarked(self, data):
+    @staticmethod
+    def imputeEmbarked(data):
         most_common = data["Embarked"].value_counts().index[0]
         data.loc[data.isnull()["Embarked"], "Embarked"] = most_common
         return data
     
-    def encode(self, data, features):
+    @staticmethod
+    def encode(data, features):
         return pd.get_dummies(data = data, columns = features, drop_first = True)
